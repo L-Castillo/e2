@@ -1,43 +1,72 @@
-<react-collision>
+<what-saw>
     <style>
-    button.psychButton:disabled {
-    color: rgba(89, 159, 207, 0.5); /*Text transparent when button disabled*/
-    }
-    div#instructions{
-    font-size: 22px;
-    padding: 20px;
-    }
-    p#question {
-    font-size: 22px;
-    margin: 10px;
-    }
-    label {
-    font-size: 20px;
-    padding-bottom: 5px;
-    margin: 5px;
-    }
-    input {
-    margin: 5px;
-    }
-    .psychErrorMessage{ /*override style*/
-    font-size: 23px;
-    text-align: center;
-    }
+        div#instructions{
+            font-size: 22px;
+            padding: 20px;
+        }
+        .psychErrorMessage{ /*override style*/
+            font-size: 23px;
+            text-align: center;
+        }
+        label {
+            font-size: 20px;
+            padding-bottom: 5px;
+            margin: 5px;
+        }
 
     </style>
+    <div id = "instructions">
+        In the previous screen you watched an animation starting like this:
+    </div>
+    <br>
 
-    <div id = "instructions">{instructionText}</div>
     <div>
         <canvas width="950" height="400" style="border: solid black 2px" ref="myCanvas"></canvas>
     </div>
+    <div style="width: 800px; margin: auto">
+        <p style="font-size: 20px">Which option best describes what happened?: </p>
+        <form>
+            <input type="radio" name="expect" id="saw_radio1" value="A" ref="radioA">
+            <label for="saw_radio1" id="labelradioA">{questions[0]}</label>
+            <br>
+            <input type="radio" name="expect" id="saw_radio2" value="B" ref="radioB">
+            <label for="saw_radio2" id="labelradioB">{questions[1]}</label>
+            <br>
+            <input type="radio" name="expect" id="saw_radio3" value="C" ref="radioC">
+            <label for="saw_radio3" id="labelradioC">{questions[2]}</label>
+            <br>
+        </form>
+    </div>
+
+
+    <p class="psychErrorMessage" show="{hasErrors}">{errorText}</p>
 
     <script>
         var self = this;
+        function shuffleArray(array){
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        self.hasErrors = false;
+        self.resultDict = {
+            "whatSaw": "",
+            "verdict": "",
+        };
+
+
         // test vars that can be changed
         self.colours = ["red", "blue", "purple"];
         self.squareDimensions = [50, 50];
         self.speed = 0.3;
+        self.showFlash = true;
+        self.answers = ["Red will move, then Blue will move, then Pink will move", "Red will move, then Pink will move, then Blue will move", "Red will move, then Blue and Pink will move at the same time"];
+        self.questions = self.answers.slice();
+        shuffleArray(self.questions);
 
+        // define what a moving display is - common to all .tags (see inner starting comments for minor changes according to tag needs)
         self.MovingDisplay = function (colours, mirroring, launchTiming, extraObjs, squareDimensions, canvas, slider = null, speed, showFlash = false) {
             // What's different about this Moving Display?
             // no hole in blue square!
@@ -425,47 +454,71 @@
             display.reset();
         };
 
-        self.leaveAttempts = 0;
-
-        self.instructionText = "You are going to watch the following squares moving. When you are ready to watch, press Next";
-
+        // overwrite funcs
         self.onInit = function () {
-            if (!self.experiment.condition.factors.knowledge == "uninformed"){
-                self.mirroring = self.experiment.condition.factors.mirroring;
-                self.launchTiming = self.experiment.condition.factors.order;
-                self.teach = (self.experiment.condition.factors.teach === "teach");
-                self.knowledge = self.experiment.condition.factors.knowledge
-                self.rectangle = new self.MovingDisplay(self.colours, self.mirroring, self.launchTiming, false, self.squareDimensions, self.refs.myCanvas, null, self.speed, false);
-            } else{
-                self.skip = true;
-            }
-            
+            // get condition info + mirroring
+            self.mirroring = self.experiment.condition.factors.mirroring;
+            self.launchTiming = self.experiment.condition.factors.order;
+            self.knowledge = self.experiment.condition.factors.knowledge;
+            self.radios = [self.refs.radioA, self.refs.radioB, self.refs.radioC];
+            self.answers = ["Red moved and pushed Blue, then Blue moved and pushed Pink", "Red moved and touched Blue, which made Pink move and after Pink stopped moving Blue moved", "Red moved and touched Blue, and then Blue and Pink moved at the same time"];
+            self.questions = self.answers.slice();
+            shuffleArray(self.questions);
+
+            // make rect
+            self.rectangle = new self.MovingDisplay(self.colours, self.mirroring, self.launchTiming, extraObjs = false, self.squareDimensions, self.refs.myCanvas, null, self.speed, false);
 
         };
-        self.onShown = function(){
-            self.choice = self.experiment.choice
-            let blueFirst = self.launchTiming == "canonical"
-            if ((self.choice[1] == 1 && !blueFirst) || self.choice[1] == 2  && blueFirst){
-                let youSaid = self.choice[1] == 1? "that the blue square moved second, but actually, it moved third - after the pink square" : "that the blue square moved third, but actually, it moved second - after the red square"
-                self.instructionText = "That is not correct. You said " + youSaid + ". Press Next to watch the animation again" 
-            } else{
-                self.instructionText = "That is correct. Press Next to watch the animation again" 
-            }
-        }
+
+
         self.canLeave = function () {
-            if (self.leaveAttempts === 0) {
-                self.leaveAttempts += 1;
-                self.rectangle.animate();
-                window.setTimeout(self.finish, self.rectangle.getLastFinish() + 1500)
-            } else if (self.rectangle.animationEnded) {
+            self.hasErrors = false;
+            if (!self.anyRadiosClicked()) {
+                self.errorText = "Please choose one of the options";
+                self.hasErrors = true;
+                return false;
+            } else {
                 return true;
-            }    
-        }
-        self.moveOn = function () {
-            self.finish();
+            }
         };
 
+        self.results = function () {
+            var answers = self.anyRadiosClicked(true);
+            var answer = self.questions[answers[1]];
+            var verdict;
+            if (answer === self.answers[2]) {
+                verdict = "nonsensical";
+            } else {
+                if (self.knowledge == "informed" && self.launchTiming == "reversed"){
+                    verdict = answer == self.answers[1] ? "congruent" : "incongruent";
+                } else{
+                    verdict = answer == self.answers[0] ? "congruent" : "incongruent";
+                }
+            }
+            self.resultDict["whatSaw"] = self.launchTiming == "canonical" ? "ABC" : "ACB";
+            self.resultDict["verdict"] = verdict;
+            return self.resultDict;
+        };
 
+        // own funcs
+
+        self.anyRadiosClicked = function (what=false) {
+            var somethingClicked = false;
+            var whatChecked;
+            for (var i = 0; i < self.radios.length; i++) {
+                if (self.radios[i].checked) {
+                    somethingClicked = true;
+                    whatChecked = i
+                }
+            }
+            if (!what) {
+                return somethingClicked
+            } else {
+                var returnList = [somethingClicked, whatChecked];
+                return returnList;
+
+            }
+        };
 
     </script>
-</react-collision>
+</what-saw>
