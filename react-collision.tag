@@ -430,7 +430,7 @@
         self.instructionText = "You are going to watch the following squares moving. When you are ready to watch, press Next";
 
         self.onInit = function () {
-            if (!self.experiment.condition.factors.knowledge == "uninformed"){
+            if (self.experiment.condition.factors.knowledge != "uninformed"){
                 self.mirroring = self.experiment.condition.factors.mirroring;
                 self.launchTiming = self.experiment.condition.factors.order;
                 self.teach = (self.experiment.condition.factors.teach === "teach");
